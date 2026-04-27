@@ -3,12 +3,12 @@
   "displayName": "Hermes Agent",
   "description": "Chat with your remote Hermes agent — pair via Telegram, attach files, paste screenshots, apply edits with diff preview.",
   "version": "0.9.3",
-  "publisher": "suicidesunrise",
+  "publisher": "maksimryzhov614",
   "license": "MIT",
-  "author": "suicidesunrise",
-  "homepage": "https://github.com/suicidesunrise/hermes-vscode#readme",
-  "repository": { "type": "git", "url": "https://github.com/suicidesunrise/hermes-vscode.git" },
-  "bugs": { "url": "https://github.com/suicidesunrise/hermes-vscode/issues" },
+  "author": "maksimryzhov614",
+  "homepage": "https://github.com/maksimryzhov614/hermes-vscode#readme",
+  "repository": { "type": "git", "url": "https://github.com/maksimryzhov614/hermes-vscode.git" },
+  "bugs": { "url": "https://github.com/maksimryzhov614/hermes-vscode/issues" },
   "keywords": ["ai", "chat", "hermes", "agent", "llm", "copilot", "cursor", "telegram"],
   "engines": { "vscode": "^1.85.0" },
   "categories": ["AI", "Chat", "Other"],
@@ -42,7 +42,7 @@
       "properties": {
         "hermes.bridgeUrl": {
           "type": "string",
-          "default": "https://hermes.suicidesunrise0.ru",
+          "default": "https://hermes.maksimryzhov6140.ru",
           "description": "URL of the hermes-bridge."
         },
         "hermes.autoApply": {
