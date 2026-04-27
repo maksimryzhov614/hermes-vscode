@@ -151,12 +151,25 @@ export class ChatPanel implements vscode.WebviewViewProvider {
   --hermes-gap: 10px;
   --hermes-bubble-pad: 10px 12px;
   --hermes-shadow: 0 1px 2px rgba(0,0,0,.06);
+  /* fallback assistant-bubble shading (when color-mix isn't supported) */
+  --hermes-bubble-bg: rgba(127,127,127,.06);
+  --hermes-bubble-border: rgba(127,127,127,.18);
+}
+@supports (background: color-mix(in srgb, red, blue)) {
+  :root {
+    --hermes-bubble-bg:    color-mix(in srgb, var(--vscode-foreground) 5%,  var(--vscode-editor-background));
+    --hermes-bubble-border: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+  }
 }
 *{box-sizing:border-box;}
 body{
   margin:0;display:flex;flex-direction:column;height:100vh;
   font-family:var(--vscode-font-family);color:var(--vscode-foreground);
-  background:var(--vscode-sideBar-background);font-size:13px;line-height:1.5;
+  background:var(--vscode-sideBar-background);
+  /* Honour VS Code zoom — falls back to 13px on older builds */
+  font-size:var(--vscode-font-size,13px);
+  line-height:1.5;
+  overflow-wrap:anywhere;
 }
 
 /* ─── Header ─── */
@@ -238,11 +251,10 @@ header .pill.busy{background:var(--vscode-inputValidation-warningBackground);}
   white-space:pre-wrap;
 }
 .msg.assistant .bubble{
-  /* tint the bubble so it stands out on both light and dark themes */
-  background:color-mix(in srgb, var(--vscode-foreground) 5%, var(--vscode-editor-background));
+  background:var(--hermes-bubble-bg);
   padding:var(--hermes-bubble-pad);border-radius:var(--hermes-radius);
   border-top-left-radius:var(--hermes-radius-sm);
-  border:1px solid color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+  border:1px solid var(--hermes-bubble-border);
 }
 .msg.system .bubble{
   font-size:11.5px;opacity:.7;font-style:italic;padding:4px 10px;
@@ -315,24 +327,32 @@ header .pill.busy{background:var(--vscode-inputValidation-warningBackground);}
 .tk-num{color:#f78c6c;}
 .tk-com{color:#8b97b1;font-style:italic;}
 .tk-fn{color:#82aaff;}
-/* light theme overrides — readable on white */
+/* light theme — multiple selectors so it works no matter how VSCode signals theme:
+   body.vscode-light                 — standard
+   body[data-vscode-theme-kind*="light"] — newer schema
+   body.hermes-light-detected        — set by our own JS via getComputedStyle
+   prefers-color-scheme              — last-ditch OS hint */
 body.vscode-light .tk-kw,
-body.vscode-high-contrast-light .tk-kw{color:#7c3aed;}
+body[data-vscode-theme-kind*="light"] .tk-kw,
+body.hermes-light-detected .tk-kw{color:#7c3aed;}
 body.vscode-light .tk-str,
-body.vscode-high-contrast-light .tk-str{color:#15803d;}
+body[data-vscode-theme-kind*="light"] .tk-str,
+body.hermes-light-detected .tk-str{color:#15803d;}
 body.vscode-light .tk-num,
-body.vscode-high-contrast-light .tk-num{color:#b45309;}
+body[data-vscode-theme-kind*="light"] .tk-num,
+body.hermes-light-detected .tk-num{color:#b45309;}
 body.vscode-light .tk-com,
-body.vscode-high-contrast-light .tk-com{color:#64748b;font-style:italic;}
+body[data-vscode-theme-kind*="light"] .tk-com,
+body.hermes-light-detected .tk-com{color:#64748b;font-style:italic;}
 body.vscode-light .tk-fn,
-body.vscode-high-contrast-light .tk-fn{color:#1d4ed8;}
-/* fallback if VSCode hasn't set the body class yet */
+body[data-vscode-theme-kind*="light"] .tk-fn,
+body.hermes-light-detected .tk-fn{color:#1d4ed8;}
 @media (prefers-color-scheme: light){
-  .tk-kw{color:#7c3aed;}
-  .tk-str{color:#15803d;}
-  .tk-num{color:#b45309;}
-  .tk-com{color:#64748b;font-style:italic;}
-  .tk-fn{color:#1d4ed8;}
+  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-kw{color:#7c3aed;}
+  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-str{color:#15803d;}
+  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-num{color:#b45309;}
+  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-com{color:#64748b;font-style:italic;}
+  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-fn{color:#1d4ed8;}
 }
 
 /* edit cards / cluster bar */
@@ -602,6 +622,25 @@ button.secondary:hover{background:var(--vscode-list-hoverBackground);}
 
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
+
+// Robust theme detection — reads the actual background colour and tags <body>
+// so our CSS selectors match no matter which class scheme VS Code uses.
+function detectTheme(){
+  const bg = getComputedStyle(document.body).backgroundColor || '';
+  // Parse "rgb(r, g, b)" / "rgba(r, g, b, a)"
+  const m = bg.match(/rgba?\\(([^)]+)\\)/);
+  if (!m) return;
+  const parts = m[1].split(',').map(s => parseFloat(s.trim()));
+  const [r, g, b] = parts;
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return;
+  // Perceived luminance (Rec. 709)
+  const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+  document.body.classList.remove('hermes-light-detected','hermes-dark-detected');
+  document.body.classList.add(lum > 140 ? 'hermes-light-detected' : 'hermes-dark-detected');
+}
+detectTheme();
+// Re-run on theme change — VS Code mutates body classes when user toggles theme
+new MutationObserver(detectTheme).observe(document.body, { attributes: true, attributeFilter: ['class','data-vscode-theme-kind'] });
 const statusText=document.getElementById('statusText');
 const statusPill=document.getElementById('statusPill');
 const statusDot=document.getElementById('statusDot');
