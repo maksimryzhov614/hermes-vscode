@@ -164,8 +164,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 *{box-sizing:border-box;}
 body{
   margin:0;display:flex;flex-direction:column;height:100vh;
-  font-family:var(--vscode-font-family);color:var(--vscode-foreground);
-  background:var(--vscode-sideBar-background);
+  font-family:var(--vscode-font-family);
+  color:var(--vscode-foreground,#1f2937);    /* fallback dark grey for broken themes */
+  background:var(--vscode-sideBar-background,#fafafa);
   /* Honour VS Code zoom — falls back to 13px on older builds */
   font-size:var(--vscode-font-size,13px);
   line-height:1.5;
@@ -230,6 +231,7 @@ header .pill.busy{background:var(--vscode-inputValidation-warningBackground);}
   padding:var(--hermes-bubble-pad);border-radius:var(--hermes-radius);
   word-wrap:break-word;line-height:1.5;
   animation:slideIn .25s ease;position:relative;
+  color:var(--vscode-foreground,#1f2937);    /* fallback for broken themes */
 }
 @keyframes slideIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
@@ -245,13 +247,16 @@ header .pill.busy{background:var(--vscode-inputValidation-warningBackground);}
 
 .msg-body{flex:1;min-width:0;}
 .msg.user .bubble{
-  background:var(--vscode-input-background);
+  background:var(--vscode-input-background,#f3f4f6);
+  color:var(--vscode-input-foreground,var(--vscode-foreground,#1f2937));
   padding:var(--hermes-bubble-pad);border-radius:var(--hermes-radius);
   border-top-left-radius:var(--hermes-radius-sm);
+  border-left:3px solid var(--hermes-accent);
   white-space:pre-wrap;
 }
 .msg.assistant .bubble{
   background:var(--hermes-bubble-bg);
+  color:var(--vscode-foreground,#1f2937);
   padding:var(--hermes-bubble-pad);border-radius:var(--hermes-radius);
   border-top-left-radius:var(--hermes-radius-sm);
   border:1px solid var(--hermes-bubble-border);
@@ -321,39 +326,30 @@ header .pill.busy{background:var(--vscode-inputValidation-warningBackground);}
 .md em{font-style:italic;}
 .md hr{border:none;border-top:1px solid var(--vscode-panel-border);margin:10px 0;}
 
-/* syntax tokens — dark theme defaults (Material Palenight) */
-.tk-kw{color:#c792ea;}
-.tk-str{color:#c3e88d;}
-.tk-num{color:#f78c6c;}
-.tk-com{color:#8b97b1;font-style:italic;}
-.tk-fn{color:#82aaff;}
-/* light theme — multiple selectors so it works no matter how VSCode signals theme:
-   body.vscode-light                 — standard
-   body[data-vscode-theme-kind*="light"] — newer schema
-   body.hermes-light-detected        — set by our own JS via getComputedStyle
-   prefers-color-scheme              — last-ditch OS hint */
-body.vscode-light .tk-kw,
-body[data-vscode-theme-kind*="light"] .tk-kw,
-body.hermes-light-detected .tk-kw{color:#7c3aed;}
-body.vscode-light .tk-str,
-body[data-vscode-theme-kind*="light"] .tk-str,
-body.hermes-light-detected .tk-str{color:#15803d;}
-body.vscode-light .tk-num,
-body[data-vscode-theme-kind*="light"] .tk-num,
-body.hermes-light-detected .tk-num{color:#b45309;}
-body.vscode-light .tk-com,
-body[data-vscode-theme-kind*="light"] .tk-com,
-body.hermes-light-detected .tk-com{color:#64748b;font-style:italic;}
-body.vscode-light .tk-fn,
-body[data-vscode-theme-kind*="light"] .tk-fn,
-body.hermes-light-detected .tk-fn{color:#1d4ed8;}
-@media (prefers-color-scheme: light){
-  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-kw{color:#7c3aed;}
-  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-str{color:#15803d;}
-  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-num{color:#b45309;}
-  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-com{color:#64748b;font-style:italic;}
-  body:not(.vscode-dark):not(.hermes-dark-detected) .tk-fn{color:#1d4ed8;}
-}
+/* Syntax tokens — DEFAULT palette is high-contrast and works on BOTH themes
+   (slightly less pretty on dark, but never invisible).
+   Dark themes get a brighter override for nicer aesthetics. */
+.tk-kw{color:#7c3aed;}                /* deep purple */
+.tk-str{color:#15803d;}               /* dark green */
+.tk-num{color:#b45309;}               /* burnt orange */
+.tk-com{color:#6b7280;font-style:italic;} /* mid grey */
+.tk-fn{color:#1d4ed8;}                /* dark blue */
+/* Dark-theme upgrade — only when we're SURE we're on dark */
+body.vscode-dark .tk-kw,
+body[data-vscode-theme-kind*="dark"] .tk-kw,
+body.hermes-dark-detected .tk-kw{color:#c792ea;}
+body.vscode-dark .tk-str,
+body[data-vscode-theme-kind*="dark"] .tk-str,
+body.hermes-dark-detected .tk-str{color:#c3e88d;}
+body.vscode-dark .tk-num,
+body[data-vscode-theme-kind*="dark"] .tk-num,
+body.hermes-dark-detected .tk-num{color:#f78c6c;}
+body.vscode-dark .tk-com,
+body[data-vscode-theme-kind*="dark"] .tk-com,
+body.hermes-dark-detected .tk-com{color:#8b97b1;font-style:italic;}
+body.vscode-dark .tk-fn,
+body[data-vscode-theme-kind*="dark"] .tk-fn,
+body.hermes-dark-detected .tk-fn{color:#82aaff;}
 
 /* edit cards / cluster bar */
 .cluster-bar{
