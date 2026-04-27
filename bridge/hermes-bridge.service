@@ -1,0 +1,17 @@
+[Unit]
+Description=Hermes Bridge — pairing + auth proxy in front of hermes api_server
+After=network.target
+
+[Service]
+Type=simple
+User=dev
+WorkingDirectory=/home/dev/hermes-bridge
+EnvironmentFile=/home/dev/hermes-bridge/.env
+ExecStart=/home/dev/.hermes/hermes-agent/venv/bin/python /home/dev/hermes-bridge/bridge.py
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:/home/dev/hermes-bridge/bridge.log
+StandardError=append:/home/dev/hermes-bridge/bridge.log
+
+[Install]
+WantedBy=multi-user.target
