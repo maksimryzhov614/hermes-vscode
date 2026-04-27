@@ -238,10 +238,11 @@ header .pill.busy{background:var(--vscode-inputValidation-warningBackground);}
   white-space:pre-wrap;
 }
 .msg.assistant .bubble{
-  background:var(--vscode-editor-background);
+  /* tint the bubble so it stands out on both light and dark themes */
+  background:color-mix(in srgb, var(--vscode-foreground) 5%, var(--vscode-editor-background));
   padding:var(--hermes-bubble-pad);border-radius:var(--hermes-radius);
   border-top-left-radius:var(--hermes-radius-sm);
-  border:1px solid var(--vscode-panel-border);
+  border:1px solid color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
 }
 .msg.system .bubble{
   font-size:11.5px;opacity:.7;font-style:italic;padding:4px 10px;
@@ -308,11 +309,31 @@ header .pill.busy{background:var(--vscode-inputValidation-warningBackground);}
 .md em{font-style:italic;}
 .md hr{border:none;border-top:1px solid var(--vscode-panel-border);margin:10px 0;}
 
+/* syntax tokens — dark theme defaults (Material Palenight) */
 .tk-kw{color:#c792ea;}
 .tk-str{color:#c3e88d;}
 .tk-num{color:#f78c6c;}
-.tk-com{color:#676e95;font-style:italic;}
+.tk-com{color:#8b97b1;font-style:italic;}
 .tk-fn{color:#82aaff;}
+/* light theme overrides — readable on white */
+body.vscode-light .tk-kw,
+body.vscode-high-contrast-light .tk-kw{color:#7c3aed;}
+body.vscode-light .tk-str,
+body.vscode-high-contrast-light .tk-str{color:#15803d;}
+body.vscode-light .tk-num,
+body.vscode-high-contrast-light .tk-num{color:#b45309;}
+body.vscode-light .tk-com,
+body.vscode-high-contrast-light .tk-com{color:#64748b;font-style:italic;}
+body.vscode-light .tk-fn,
+body.vscode-high-contrast-light .tk-fn{color:#1d4ed8;}
+/* fallback if VSCode hasn't set the body class yet */
+@media (prefers-color-scheme: light){
+  .tk-kw{color:#7c3aed;}
+  .tk-str{color:#15803d;}
+  .tk-num{color:#b45309;}
+  .tk-com{color:#64748b;font-style:italic;}
+  .tk-fn{color:#1d4ed8;}
+}
 
 /* edit cards / cluster bar */
 .cluster-bar{
