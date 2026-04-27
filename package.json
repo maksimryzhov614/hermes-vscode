@@ -2,7 +2,7 @@
   "name": "hermes-vscode",
   "displayName": "Hermes Agent",
   "description": "Chat with your remote Hermes agent — pair via Telegram, attach files, paste screenshots, apply edits with diff preview.",
-  "version": "0.9.8",
+  "version": "0.10.0",
   "publisher": "maksimryzhov614",
   "license": "MIT",
   "author": "maksimryzhov614",
@@ -55,6 +55,12 @@
           "type": "boolean",
           "default": true,
           "description": "Check GitHub Releases for a newer .vsix on startup; show a notification if an update is available."
+        },
+        "hermes.theme": {
+          "type": "string",
+          "enum": ["auto", "light", "dark"],
+          "default": "auto",
+          "description": "Override the Hermes panel theme independently of VS Code."
         }
       }
     },

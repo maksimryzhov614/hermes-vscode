@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
 import * as os from "node:os";
 import * as path from "node:path";
+import * as fs from "node:fs";
 import { BridgeClient, ChatMessage, ContentPart } from "./bridgeClient";
-import { ChatPanel, AttachedDescriptor, ChatMessageOut, Mode } from "./chatPanel";
+import { ChatPanel, AttachedDescriptor, ChatMessageOut, Mode, ThemeOverride, ExamplePrompt, ClusterDescriptor } from "./chatPanel";
 import { activeFile, AttachedFile, renderFilesForPrompt, resolveMentions } from "./codeContext";
 import { applyEditNow, parseEdits, ProposedEdit, registerProposedProvider, reviewEdit } from "./diffApply";
 import { discover } from "./discovery";
@@ -14,13 +15,13 @@ const FALLBACK_URL_KEY = "hermes.fallbackUrl";
 const HISTORY_KEY = "hermes.history";
 const VISIBLE_LOG_KEY = "hermes.visibleLog";
 const MODE_KEY = "hermes.mode";
+const SHOW_USAGE_KEY = "hermes.showUsage";
 
 let mode: Mode = "default";
-
 let client: BridgeClient | null = null;
 let panel: ChatPanel | null = null;
 let history: ChatMessage[] = [];
-let visibleLog: ChatMessageOut[] = [];   // what's shown in the panel; persisted
+let visibleLog: ChatMessageOut[] = [];
 let pairAbort: AbortController | null = null;
 let chatAbort: AbortController | null = null;
 let secrets: vscode.SecretStorage;
@@ -36,7 +37,7 @@ interface Pending {
 }
 const pending: Pending = { files: [], images: [] };
 const editIndex = new Map<string, ProposedEdit>();
-const clusterIndex = new Map<string, string[]>(); // clusterId → editIds
+const clusterIndex = new Map<string, string[]>();
 
 const SYSTEM_PROMPT = `You are Hermes, integrated into the user's VS Code on a remote machine.
 
@@ -58,31 +59,9 @@ Modes:
 
 Paths are relative to the workspace root.
 
-Examples:
+When citing existing files in your reply (not editing them), reference them like \`src/foo.ts\` or \`src/foo.ts:42\` — the editor renders these as clickable links.
 
-  User: "create hello.txt with the text 'hi'"
-  You:
-  ~~~hermes-edit path=hello.txt mode=create
-  hi
-  ~~~
-
-  User: "fix the bug in src/add.ts"
-  You: I see the operator is wrong.
-  ~~~hermes-edit path=src/add.ts mode=replace
-  export function add(a: number, b: number): number {
-    return a + b;
-  }
-  ~~~
-
-  User: "delete tmp/foo.log"
-  You:
-  ~~~hermes-edit path=tmp/foo.log mode=delete
-  ~~~
-
-Context:
-The user can attach files and screenshots to their messages. Treat any \`\`\`<lang> path=...\`\`\`
-fenced blocks in their message as the *current* contents of those files. Outside hermes-edit
-blocks, write concise markdown (headings, lists, **bold**, \`code\`, fenced blocks) — the editor renders it.`;
+Outside hermes-edit blocks, write concise markdown (headings, lists, **bold**, \`code\`, fenced code blocks).`;
 
 export function activate(ctx: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel("Hermes");
@@ -97,8 +76,6 @@ export function activate(ctx: vscode.ExtensionContext): void {
     onCancelPair: () => cancelPairing(),
     onPrompt: (t) => sendPrompt(t),
     onClear: () => clearHistory(),
-    onOpenSettings: () =>
-      vscode.commands.executeCommand("workbench.action.openSettings", "hermes"),
     onAttachFile: () => attachActiveFile(false),
     onAttachSelection: () => attachActiveFile(true),
     onRemoveAttachment: (id) => removeAttachment(id),
@@ -108,7 +85,9 @@ export function activate(ctx: vscode.ExtensionContext): void {
     onRejectCluster: (cid) => rejectCluster(cid),
     onStop: () => stopGeneration(),
     onRetry: () => retryLast(),
-    onModeChange: (m) => setMode(m)
+    onModeChange: (m) => setMode(m),
+    onSettingsChange: (s) => applySettings(s),
+    onOpenFile: (p, line) => openFileFromLink(p, line),
   });
 
   ctx.subscriptions.push(
@@ -126,47 +105,132 @@ export function activate(ctx: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("hermes.sendFile", () => attachActiveFile(false).then(() => panel?.reveal())),
     vscode.commands.registerCommand("hermes.sendSelection", () => attachActiveFile(true).then(() => panel?.reveal())),
     vscode.commands.registerCommand("hermes.askAboutSelection", () => askAboutSelection()),
-    vscode.commands.registerCommand("hermes.checkForUpdates", () =>
-      checkForUpdates(ctx, log, { silent: false }))
+    vscode.commands.registerCommand("hermes.checkForUpdates", () => checkForUpdates(ctx, log, { silent: false }))
   );
 
-  // Auto check for updates 5s after activate (silent — only nags if newer exists)
-  setTimeout(() => checkForUpdates(ctx, log, { silent: true }).catch(() => {}), 5000);
+  // Refresh examples / workspace info on editor change
+  ctx.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => updateExamplesAndWorkspace()),
+    vscode.window.onDidChangeTextEditorSelection(() => updateExamplesAndWorkspace()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => updateExamplesAndWorkspace())
+  );
 
-  // Restore persisted state for this workspace
+  // Restore persisted state
   const savedHistory = workspaceMemento.get<ChatMessage[]>(HISTORY_KEY) || [];
   const savedLog = workspaceMemento.get<ChatMessageOut[]>(VISIBLE_LOG_KEY) || [];
-  const savedMode = (memento.get<string>(MODE_KEY) as Mode | undefined) || "default";
+  mode = (memento.get<string>(MODE_KEY) as Mode | undefined) || "default";
   history = savedHistory;
   visibleLog = savedLog;
-  mode = savedMode;
+
   panel.setMode(mode);
+  pushSettingsToPanel();
   if (visibleLog.length) panel.loadHistory(visibleLog);
+  updateExamplesAndWorkspace();
 
   refreshClient().catch((e) => log("activate failed: " + String(e)));
-}
 
-function setMode(m: Mode): void {
-  mode = m;
-  void memento.update(MODE_KEY, m);
-  panel?.setMode(m);
-  pushAndPersist({
-    role: "system",
-    text: `Mode: ${m === "default" ? "🛡 Default — review each edit"
-                : m === "auto"    ? "⚡ Auto-edit — apply without asking"
-                : "📋 Plan — Hermes plans first, executes after your 'go'"}`,
-    kind: "info"
-  });
-  // History continuity: reset agent context so the new mode prompt takes effect
-  // on next turn. We keep visibleLog so the chat doesn't appear wiped.
-  history = [];
-  persistHistory();
+  setTimeout(() => checkForUpdates(ctx, log, { silent: true }).catch(() => {}), 5000);
 }
 
 export function deactivate(): void {
   pairAbort?.abort();
   chatAbort?.abort();
 }
+
+function setMode(m: Mode): void {
+  mode = m;
+  void memento.update(MODE_KEY, m);
+  panel?.setMode(m);
+  history = [];
+  persistHistory();
+}
+
+function applySettings(s: { bridgeUrl?: string; mode?: Mode; themeOverride?: ThemeOverride; showUsage?: boolean }): void {
+  if (typeof s.bridgeUrl === "string") {
+    void vscode.workspace.getConfiguration("hermes").update("bridgeUrl", s.bridgeUrl, vscode.ConfigurationTarget.Global);
+    refreshClient().catch(() => {});
+  }
+  if (s.mode && s.mode !== mode) setMode(s.mode);
+  if (s.themeOverride) {
+    void vscode.workspace.getConfiguration("hermes").update("theme", s.themeOverride, vscode.ConfigurationTarget.Global);
+  }
+  if (typeof s.showUsage === "boolean") {
+    void memento.update(SHOW_USAGE_KEY, s.showUsage);
+  }
+}
+
+function pushSettingsToPanel(): void {
+  const cfg = vscode.workspace.getConfiguration("hermes");
+  panel?.setSettings({
+    bridgeUrl: cfg.get<string>("bridgeUrl") || "",
+    mode,
+    themeOverride: (cfg.get<string>("theme") as ThemeOverride) || "auto",
+    showUsage: memento.get<boolean>(SHOW_USAGE_KEY, true),
+  });
+}
+
+async function openFileFromLink(p: string, line?: number): Promise<void> {
+  const root = workspaceRoot();
+  const abs = path.isAbsolute(p) ? p : root ? path.join(root, p) : p;
+  try {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(abs));
+    const ed = await vscode.window.showTextDocument(doc, { preview: true });
+    if (typeof line === "number" && line > 0) {
+      const pos = new vscode.Position(line - 1, 0);
+      ed.selection = new vscode.Selection(pos, pos);
+      ed.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+    }
+  } catch (e: any) {
+    vscode.window.showWarningMessage(`Cannot open ${p}: ${e.message}`);
+  }
+}
+
+// ─── Workspace + smart examples ─────────────────────────────────────────
+
+function updateExamplesAndWorkspace(): void {
+  if (!panel) return;
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  panel.setWorkspace({
+    name: folder?.name ?? null,
+    branch: folder ? readGitBranch(folder.uri.fsPath) : null,
+  });
+
+  const ed = vscode.window.activeTextEditor;
+  const examples: ExamplePrompt[] = [];
+  if (ed && !ed.selection.isEmpty) {
+    const sel = ed.document.getText(ed.selection);
+    const preview = sel.length > 40 ? sel.slice(0, 40).replace(/\s+/g, " ") + "…" : sel.replace(/\s+/g, " ");
+    examples.push({ icon: "🔍", text: `Explain this selection (${preview})`, prompt: "Explain what this selected code does." });
+    examples.push({ icon: "🐛", text: "Find a bug in this selection", prompt: "Find any bugs in this selected code and propose a fix." });
+    examples.push({ icon: "🧪", text: "Write a test for this selection", prompt: "Write a unit test for this selected code." });
+  } else if (ed) {
+    const fname = path.basename(ed.document.fileName);
+    examples.push({ icon: "📖", text: `Explain ${fname}`, prompt: `Explain what ${fname} does.` });
+    examples.push({ icon: "🔧", text: `Refactor ${fname}`, prompt: `Suggest refactorings for ${fname}.` });
+    examples.push({ icon: "🐛", text: `Find bugs in ${fname}`, prompt: `Read ${fname} and list any bugs you find.` });
+  } else if (folder) {
+    examples.push({ icon: "📦", text: `What is this project?`, prompt: "Look at the project structure and tell me what this codebase does." });
+    examples.push({ icon: "✨", text: `Generate a README`, prompt: "Generate a README.md for this project." });
+    examples.push({ icon: "🔧", text: `Set up .gitignore`, prompt: "Generate a .gitignore appropriate for this project." });
+  } else {
+    examples.push({ icon: "💡", text: "Open a folder to get smarter suggestions" });
+    examples.push({ icon: "🖼", text: "Paste a screenshot — I can see images" });
+    examples.push({ icon: "📋", text: "Try Plan mode for big changes (/plan)" });
+  }
+  panel.setExamples(examples);
+}
+
+function readGitBranch(repoPath: string): string | null {
+  try {
+    const headPath = path.join(repoPath, ".git", "HEAD");
+    if (!fs.existsSync(headPath)) return null;
+    const head = fs.readFileSync(headPath, "utf8").trim();
+    const m = head.match(/^ref:\s+refs\/heads\/(.+)$/);
+    return m ? m[1] : head.slice(0, 7);
+  } catch { return null; }
+}
+
+// ─── Connection / pairing (unchanged from v0.9.x) ─────────────────────────
 
 function getCfg(): { baseUrl: string } {
   const c = vscode.workspace.getConfiguration("hermes");
@@ -179,25 +243,25 @@ function getCfg(): { baseUrl: string } {
 async function refreshClient(): Promise<void> {
   let { baseUrl } = getCfg();
   if (!baseUrl) {
-    panel?.setStatus("looking for hermes-bridge…");
+    panel?.setStatus("looking for bridge…", false);
     panel?.setState({ kind: "needsPair" });
     const found = await discover((s) => log(s));
     if (found) {
       await memento.update(DISCOVERED_KEY, found);
       baseUrl = found;
     } else {
-      panel?.setStatus("no bridge found — set URL in Settings");
-      panel?.setState({ kind: "error", message: "Could not auto-discover hermes-bridge" });
+      panel?.setStatus("no bridge configured", false, true);
+      panel?.setState({ kind: "error", message: "Bridge URL not set" });
       return;
     }
   }
   const token = await secrets.get(TOKEN_KEY);
   client = new BridgeClient({ baseUrl, token: token ?? undefined });
   if (token) {
-    panel?.setStatus(`connected · ${shortUrl(baseUrl)}`);
+    panel?.setStatus(`connected · ${shortUrl(baseUrl)}`, false);
     panel?.setState({ kind: "ready" });
   } else {
-    panel?.setStatus(`found bridge · ${shortUrl(baseUrl)} · not paired`);
+    panel?.setStatus(`bridge ready · not paired`, false);
     panel?.setState({ kind: "needsPair" });
   }
 }
@@ -209,40 +273,25 @@ async function rediscover(): Promise<void> {
   await refreshClient();
 }
 
-function shortUrl(u: string): string {
-  try { return new URL(u).host; } catch { return u; }
-}
-
-// ─── Pairing ──────────────────────────────────────────────────────────────
+function shortUrl(u: string): string { try { return new URL(u).host; } catch { return u; } }
 
 async function startPairing(): Promise<void> {
   const { baseUrl } = getCfg();
   if (!baseUrl) {
-    vscode.window.showErrorMessage("Set 'Hermes › Bridge URL' in settings first.");
+    vscode.window.showErrorMessage("Set Bridge URL in ⚙ Settings first.");
     return;
   }
   client = client ?? new BridgeClient({ baseUrl });
   pairAbort?.abort();
   pairAbort = new AbortController();
-
-  const clientName = `VSCode on ${os.hostname()}`;
   let init;
-  try { init = await client.pairInit(clientName); }
-  catch (e: any) {
-    panel?.setState({ kind: "error", message: `pair init failed: ${e.message}` });
-    return;
-  }
-
-  panel?.setStatus("waiting for approval in Telegram…");
+  try { init = await client.pairInit(`VSCode on ${os.hostname()}`); }
+  catch (e: any) { panel?.setState({ kind: "error", message: `pair init: ${e.message}` }); return; }
+  panel?.setStatus("waiting for approval…", true);
   panel?.setState({ kind: "pairing", code: init.code, expiresIn: init.expiresIn });
-
   const deadline = Date.now() + Math.min(init.expiresIn, 300) * 1000;
   while (Date.now() < deadline) {
-    if (pairAbort.signal.aborted) {
-      panel?.setStatus("pairing cancelled");
-      panel?.setState({ kind: "needsPair" });
-      return;
-    }
+    if (pairAbort.signal.aborted) { panel?.setStatus("cancelled", false); panel?.setState({ kind: "needsPair" }); return; }
     await sleep(2000);
     try {
       const token = await client.pairPoll(init.code);
@@ -250,16 +299,13 @@ async function startPairing(): Promise<void> {
         await secrets.store(TOKEN_KEY, token);
         client.setToken(token);
         await clearHistory();
-        panel?.setStatus("paired ✓");
+        panel?.setStatus("paired ✓", false);
         panel?.setState({ kind: "ready" });
         return;
       }
-    } catch (e: any) {
-      panel?.setState({ kind: "error", message: e.message });
-      return;
-    }
+    } catch (e: any) { panel?.setState({ kind: "error", message: e.message }); return; }
   }
-  panel?.setStatus("pairing timed out");
+  panel?.setStatus("pairing timed out", false, true);
   panel?.setState({ kind: "needsPair" });
 }
 
@@ -271,9 +317,8 @@ async function attachActiveFile(selectionOnly: boolean): Promise<void> {
   const f = await activeFile({ selectionOnly });
   if (!f) {
     vscode.window.showInformationMessage(
-      selectionOnly
-        ? "No text selected in the active editor — select something first, then click ✂️."
-        : "No active editor — open a file first, then click 📄."
+      selectionOnly ? "Select some text first, then click ✂️ Selection."
+                    : "Open a file first, then click 📄 Attach active file."
     );
     return;
   }
@@ -297,46 +342,9 @@ function clearPending(): void { pending.files = []; pending.images = []; refresh
 
 function refreshAttachmentsBar(): void {
   const items: AttachedDescriptor[] = [];
-  for (const f of pending.files) {
-    items.push({
-      id: `f-${f.absPath}`,
-      type: "file",
-      label: `${f.label}${f.truncated ? " (truncated)" : ""}`
-    });
-  }
-  for (const i of pending.images) {
-    items.push({ id: i.id, type: "image", label: "screenshot", thumbnail: i.dataUrl });
-  }
+  for (const f of pending.files) items.push({ id: `f-${f.absPath}`, type: "file", label: `${f.label}${f.truncated ? " (truncated)" : ""}` });
+  for (const i of pending.images) items.push({ id: i.id, type: "image", label: "screenshot", thumbnail: i.dataUrl });
   panel?.setAttachments(items);
-}
-
-// ─── Workspace tree (auto context) ────────────────────────────────────────
-
-async function workspaceTree(maxEntries = 100): Promise<string> {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  if (!folder) return "";
-  const SKIP = new Set(["node_modules", ".git", ".venv", "venv", "dist", "build", "out", "__pycache__", ".next", ".vscode-test", "target"]);
-  const entries: string[] = [];
-  async function walk(uri: vscode.Uri, depth: number, prefix: string): Promise<void> {
-    if (entries.length >= maxEntries || depth > 3) return;
-    let items: [string, vscode.FileType][];
-    try { items = await vscode.workspace.fs.readDirectory(uri); }
-    catch { return; }
-    items.sort(([a], [b]) => a.localeCompare(b));
-    for (const [name, kind] of items) {
-      if (entries.length >= maxEntries) return;
-      if (name.startsWith(".") && name !== ".env.example") continue;
-      if (SKIP.has(name)) continue;
-      const rel = path.posix.join(prefix, name);
-      entries.push(rel + (kind === vscode.FileType.Directory ? "/" : ""));
-      if (kind === vscode.FileType.Directory) {
-        await walk(vscode.Uri.joinPath(uri, name), depth + 1, rel);
-      }
-    }
-  }
-  await walk(folder.uri, 0, "");
-  if (!entries.length) return "";
-  return `Workspace tree (top ${entries.length}):\n` + entries.join("\n");
 }
 
 // ─── Chat ─────────────────────────────────────────────────────────────────
@@ -347,30 +355,22 @@ async function sendPrompt(rawText: string): Promise<void> {
     return;
   }
   lastUserPrompt = rawText;
-
   const { prompt: cleanedPrompt, files: mentionFiles } = await resolveMentions(rawText);
   const allFiles = [...pending.files, ...mentionFiles];
   const filesBlock = renderFilesForPrompt(allFiles);
   const textPart = (filesBlock ? `${filesBlock}\n\n` : "") + cleanedPrompt;
 
   const parts: ContentPart[] = [{ type: "text", text: textPart }];
-  for (const img of pending.images) {
-    parts.push({ type: "image_url", image_url: { url: img.dataUrl, detail: "auto" } });
-  }
+  for (const img of pending.images) parts.push({ type: "image_url", image_url: { url: img.dataUrl, detail: "auto" } });
   const userContent = pending.images.length > 0 ? parts : textPart;
 
-  // System prompt + workspace tree + mode-specific addendum on first turn
   if (history.length === 0) {
-    const tree = await workspaceTree();
-    let sys = tree ? `${SYSTEM_PROMPT}\n\n${tree}` : SYSTEM_PROMPT;
-    sys += "\n\n" + modeAddendum(mode);
+    let sys = SYSTEM_PROMPT + "\n\n" + modeAddendum(mode);
     history.push({ role: "system", content: sys });
   }
   history.push({ role: "user", content: userContent });
 
   const summary = formatUserSummary(rawText, allFiles, pending.images.length);
-  // Don't push to panel — webview already echoed the user's text immediately.
-  // Just persist for history restoration after reload.
   visibleLog.push({ role: "user", text: summary });
   persistHistory();
   clearPending();
@@ -389,92 +389,72 @@ async function streamChat(): Promise<void> {
   try {
     await client.chatStream(
       history,
-      (chunk) => {
-        assistant += chunk;
-        panel?.push({ role: "assistant", text: chunk });
-      },
-      {
-        abort: chatAbort.signal,
-        onUsage: (u) => { usage = u; }
-      }
+      (chunk) => { assistant += chunk; panel?.push({ role: "assistant", text: chunk }); },
+      { abort: chatAbort.signal, onUsage: (u) => { usage = u; } }
     );
     if (assistant.trim()) {
       history.push({ role: "assistant", content: assistant });
       visibleLog.push({ role: "assistant", text: assistant });
+
       const edits = parseEdits(assistant);
-
-      // PLAN mode: suppress edit-card rendering until the user has explicitly
-      // said "go" since the most recent assistant turn. The model should
-      // already be following this — this is a belt-and-suspenders gate.
       const planLocked = mode === "plan" && !lastUserSaidGo();
-
       if (planLocked && edits.length) {
-        log(`plan mode: ${edits.length} edit block(s) suppressed; user must confirm with 'go'`);
-        pushAndPersist({
-          role: "system",
-          text: `📋 ${edits.length} edit(s) prepared. Reply "go" to proceed.`,
-          kind: "info"
-        });
-      } else {
-        if (edits.length > 1) {
-          const clusterId = "cl-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
-          clusterIndex.set(clusterId, []);
-          panel?.pushClusterBar(clusterId, edits.length);
-          for (const e of edits) {
+        log(`plan mode: ${edits.length} edit(s) suppressed`);
+        visibleLog.push({ role: "system", text: `📋 ${edits.length} edit(s) prepared. Reply "go" to proceed.`, kind: "info" });
+        panel?.push({ role: "system", text: `📋 ${edits.length} edit(s) prepared. Reply "go" to proceed.`, kind: "info" });
+      } else if (edits.length > 1) {
+        const clusterId = "cl-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
+        clusterIndex.set(clusterId, []);
+        const cluster: ClusterDescriptor = {
+          id: clusterId, count: edits.length,
+          edits: edits.map((e) => {
             const id = makeEditId();
             editIndex.set(id, e);
             clusterIndex.get(clusterId)!.push(id);
-            panel?.pushEdit({ id, path: e.path, mode: e.mode, status: "pending" });
-          }
-        } else {
-          for (const e of edits) {
-            const id = makeEditId();
-            editIndex.set(id, e);
-            panel?.pushEdit({ id, path: e.path, mode: e.mode, status: "pending" });
-          }
-        }
-        const autoApply = mode === "auto"
-          || vscode.workspace.getConfiguration("hermes").get<boolean>("autoApply", false);
-        if (autoApply) {
-          for (const [id, e] of editIndex.entries()) {
-            autoApplyEdit(id, e).catch((err) => log("autoApply: " + err));
-          }
+            return { id, path: e.path, mode: e.mode, status: "pending" };
+          })
+        };
+        panel?.pushCluster(cluster);
+        const autoApply = mode === "auto";
+        if (autoApply) for (const e of cluster.edits) autoApplyEdit(e.id, editIndex.get(e.id)!).catch(() => {});
+      } else {
+        for (const e of edits) {
+          const id = makeEditId();
+          editIndex.set(id, e);
+          panel?.pushEdit({ id, path: e.path, mode: e.mode, status: "pending" });
+          if (mode === "auto") autoApplyEdit(id, e).catch(() => {});
         }
       }
     }
     if (usage) {
       const u = usage as any;
-      const usageText = `tokens — in: ${u.prompt_tokens ?? "?"}  out: ${u.completion_tokens ?? "?"}  total: ${u.total_tokens ?? "?"}`;
-      pushAndPersist({ role: "system", text: usageText, kind: "usage" });
+      panel?.setUsage({ in: u.prompt_tokens ?? 0, out: u.completion_tokens ?? 0 });
     }
     persistHistory();
     panel?.setStatus("ready", false);
   } catch (e: any) {
-    panel?.setStatus("error", false);
+    panel?.setStatus("error", false, true);
     const msg = (e && e.message) ? e.message : String(e);
     if (chatAbort?.signal.aborted) {
-      pushAndPersist({ role: "system", text: "[stopped]", kind: "info" });
+      visibleLog.push({ role: "system", text: "[stopped]", kind: "info" });
+      panel?.push({ role: "system", text: "[stopped]", kind: "info" });
     } else if (/HTTP 401/.test(msg)) {
       await secrets.delete(TOKEN_KEY);
       panel?.setState({ kind: "needsPair" });
-      pushAndPersist({ role: "assistant", text: "Token rejected. Re-pair.", kind: "error" });
+      panel?.push({ role: "assistant", text: "Token rejected. Re-pair via Settings.", kind: "error" });
     } else if (await maybeFailoverAndRetry(msg)) {
-      return;  // retry succeeded via fallback
+      return;
     } else {
-      pushAndPersist({ role: "assistant", text: `[error: ${msg}]`, kind: "error", retryable: true });
+      panel?.push({ role: "assistant", text: `[error: ${msg}]`, kind: "error", retryable: true });
       log("chat error: " + msg);
     }
   }
 }
 
-/** If chat fails with a transport-level error, try discovering a fallback URL
- *  (Tailscale peer) and retry the same history once. */
 async function maybeFailoverAndRetry(msg: string): Promise<boolean> {
   if (isUsingFallback) return false;
-  if (!/HTTP 5\d\d|aborted|ECONNRESET|ETIMEDOUT|EAI_AGAIN|getaddrinfo|fetch failed/i.test(msg)) {
-    return false;
-  }
-  log("primary failed (" + msg + "), trying fallback discovery");
+  if (!/HTTP 5\d\d|aborted|ECONNRESET|ETIMEDOUT|EAI_AGAIN|getaddrinfo|fetch failed/i.test(msg)) return false;
+  log("primary failed, trying fallback discovery");
   const found = await discover((s) => log(s));
   if (!found) return false;
   await memento.update(FALLBACK_URL_KEY, found);
@@ -482,22 +462,13 @@ async function maybeFailoverAndRetry(msg: string): Promise<boolean> {
   const token = await secrets.get(TOKEN_KEY);
   client = new BridgeClient({ baseUrl: found, token: token ?? undefined });
   panel?.setStatus(`fallback: ${shortUrl(found)}`, true);
-  // Retry once
-  try {
-    await streamChat();
-    return true;
-  } catch {
-    return false;
-  }
+  try { await streamChat(); return true; } catch { return false; }
 }
 
-function stopGeneration(): void {
-  chatAbort?.abort();
-}
+function stopGeneration(): void { chatAbort?.abort(); }
 
 async function retryLast(): Promise<void> {
   if (!lastUserPrompt) return;
-  // Roll back history to before the last user message
   const lastUserIdx = [...history].reverse().findIndex((m) => m.role === "user");
   if (lastUserIdx >= 0) history.splice(history.length - lastUserIdx - 1);
   await sendPrompt(lastUserPrompt);
@@ -511,21 +482,25 @@ async function reviewEditById(id: string): Promise<void> {
   const edit = editIndex.get(id);
   if (!edit) return;
   const root = workspaceRoot();
-  if (!root) {
-    vscode.window.showErrorMessage("Open a folder/workspace before applying Hermes edits.");
-    return;
-  }
+  if (!root) { vscode.window.showErrorMessage("Open a folder before applying edits."); return; }
   const result = await reviewEdit(edit, root);
-  if (result === "applied") panel?.updateEdit(id, "applied");
-  else if (result === "rejected") panel?.updateEdit(id, "rejected");
+  // Find which cluster (if any) this edit belongs to and update there
+  let clusterId: string | undefined;
+  for (const [cid, ids] of clusterIndex.entries()) {
+    if (ids.includes(id)) { clusterId = cid; break; }
+  }
+  if (result === "applied") {
+    if (clusterId) panel?.updateClusterEdit(clusterId, id, "applied");
+    else panel?.updateEdit(id, "applied");
+  } else if (result === "rejected") {
+    if (clusterId) panel?.updateClusterEdit(clusterId, id, "rejected");
+    else panel?.updateEdit(id, "rejected");
+  }
 }
 
 async function autoApplyEdit(id: string, edit: ProposedEdit): Promise<void> {
   const root = workspaceRoot();
-  if (!root) {
-    vscode.window.showWarningMessage("Hermes proposed an edit but no folder is open.");
-    return;
-  }
+  if (!root) { vscode.window.showWarningMessage("Hermes proposed edit but no folder open."); return; }
   try {
     await applyEditNow(edit, root);
     panel?.updateEdit(id, "applied");
@@ -546,8 +521,8 @@ async function applyCluster(clusterId: string): Promise<void> {
   for (const id of ids) {
     const e = editIndex.get(id);
     if (!e) continue;
-    try { await applyEditNow(e, root); panel?.updateEdit(id, "applied"); ok++; }
-    catch { panel?.updateEdit(id, "rejected"); fail++; }
+    try { await applyEditNow(e, root); panel?.updateClusterEdit(clusterId, id, "applied"); ok++; }
+    catch { panel?.updateClusterEdit(clusterId, id, "rejected"); fail++; }
   }
   vscode.window.showInformationMessage(`Hermes: applied ${ok} edit(s)${fail ? `, ${fail} failed` : ""}.`);
 }
@@ -555,7 +530,7 @@ async function applyCluster(clusterId: string): Promise<void> {
 function rejectCluster(clusterId: string): void {
   const ids = clusterIndex.get(clusterId);
   if (!ids) return;
-  for (const id of ids) panel?.updateEdit(id, "rejected");
+  for (const id of ids) panel?.updateClusterEdit(clusterId, id, "rejected");
 }
 
 function workspaceRoot(): string | null {
@@ -563,22 +538,16 @@ function workspaceRoot(): string | null {
 }
 
 function modeAddendum(m: Mode): string {
-  if (m === "auto") {
-    return `Mode: AUTO-EDIT. The user has enabled auto-apply — your hermes-edit blocks will be applied immediately without their review. Be careful and surgical: avoid unrelated changes, prefer minimal diffs, double-check paths.`;
-  }
-  if (m === "plan") {
-    return `Mode: PLAN. Before making ANY file change, you must FIRST present a numbered plan and ASK the user "Proceed?" — do NOT emit any \`~~~hermes-edit~~~\` blocks yet. Wait for the user to reply with "go" / "yes" / "proceed" / "do it" or similar confirmation. ONLY in your reply AFTER that confirmation may you emit hermes-edit blocks. If the user wants changes to the plan, revise the plan and ask again.`;
-  }
-  return `Mode: DEFAULT. Each hermes-edit block you emit will be shown to the user as a Review card; they will accept or reject each one individually.`;
+  if (m === "auto") return `Mode: AUTO-EDIT — your hermes-edit blocks will be applied immediately. Be surgical.`;
+  if (m === "plan") return `Mode: PLAN. BEFORE making any file change, present a numbered plan and ASK "Proceed?". Do NOT emit hermes-edit blocks until the user replies "go" / "yes" / "proceed".`;
+  return `Mode: DEFAULT — each hermes-edit block becomes a Review card the user accepts/rejects.`;
 }
 
 function lastUserSaidGo(): boolean {
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i].role !== "user") continue;
     const c = history[i].content;
-    const text = typeof c === "string"
-      ? c
-      : c.map((p: any) => p?.type === "text" ? p.text : "").join(" ");
+    const text = typeof c === "string" ? c : c.map((p: any) => p?.type === "text" ? p.text : "").join(" ");
     return /\b(go|yes|proceed|do it|давай|поехали|да|вперед|действуй)\b/i.test(text);
   }
   return false;
@@ -592,8 +561,6 @@ function formatUserSummary(prompt: string, files: AttachedFile[], imageCount: nu
   return parts.join(" · ") + "\n\n" + prompt;
 }
 
-// ─── "Ask about this" command from editor ─────────────────────────────────
-
 async function askAboutSelection(): Promise<void> {
   const ed = vscode.window.activeTextEditor;
   if (!ed) { vscode.window.showInformationMessage("No active editor."); return; }
@@ -602,18 +569,10 @@ async function askAboutSelection(): Promise<void> {
   panel?.reveal();
   const prompt = await vscode.window.showInputBox({
     prompt: hasSel ? "Ask Hermes about this selection" : "Ask Hermes about this file",
-    placeHolder: "Explain what this does / find the bug / suggest a refactor / ..."
+    placeHolder: "Explain / find bug / refactor / ..."
   });
   if (prompt) sendPrompt(prompt);
   else clearPending();
-}
-
-// ─── Persistence ──────────────────────────────────────────────────────────
-
-function pushAndPersist(m: ChatMessageOut): void {
-  visibleLog.push(m);
-  panel?.push(m);
-  persistHistory();
 }
 
 function persistHistory(): void {
@@ -622,24 +581,17 @@ function persistHistory(): void {
 }
 
 async function clearHistory(): Promise<void> {
-  history = [];
-  visibleLog = [];
-  editIndex.clear();
-  clusterIndex.clear();
+  history = []; visibleLog = []; editIndex.clear(); clusterIndex.clear();
   clearPending();
   await workspaceMemento.update(HISTORY_KEY, undefined);
   await workspaceMemento.update(VISIBLE_LOG_KEY, undefined);
   panel?.loadHistory([]);
 }
 
-// ─── auth ────────────────────────────────────────────────────────────────
-
 async function signOut(): Promise<void> {
-  // Best-effort revoke at the bridge — fire-and-forget; works even if offline
   try {
     const t = await secrets.get(TOKEN_KEY);
     if (t && client) {
-      // POST /pair/revoke (we don't have a method on the client; do raw)
       const url = new URL("/pair/revoke", (client as any).cfg.baseUrl);
       const lib = url.protocol === "https:" ? require("node:https") : require("node:http");
       const req = lib.request({
@@ -651,7 +603,7 @@ async function signOut(): Promise<void> {
       req.on("error", () => {});
       req.end();
     }
-  } catch { /* ignore */ }
+  } catch {}
   await secrets.delete(TOKEN_KEY);
   await clearHistory();
   await refreshClient();
