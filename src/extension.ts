@@ -6,6 +6,7 @@ import { ChatPanel, AttachedDescriptor, ChatMessageOut, Mode } from "./chatPanel
 import { activeFile, AttachedFile, renderFilesForPrompt, resolveMentions } from "./codeContext";
 import { applyEditNow, parseEdits, ProposedEdit, registerProposedProvider, reviewEdit } from "./diffApply";
 import { discover } from "./discovery";
+import { checkForUpdates } from "./updater";
 
 const TOKEN_KEY = "hermes.token";
 const DISCOVERED_KEY = "hermes.discoveredUrl";
@@ -124,8 +125,13 @@ export function activate(ctx: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("hermes.clearHistory", () => clearHistory()),
     vscode.commands.registerCommand("hermes.sendFile", () => attachActiveFile(false).then(() => panel?.reveal())),
     vscode.commands.registerCommand("hermes.sendSelection", () => attachActiveFile(true).then(() => panel?.reveal())),
-    vscode.commands.registerCommand("hermes.askAboutSelection", () => askAboutSelection())
+    vscode.commands.registerCommand("hermes.askAboutSelection", () => askAboutSelection()),
+    vscode.commands.registerCommand("hermes.checkForUpdates", () =>
+      checkForUpdates(ctx, log, { silent: false }))
   );
+
+  // Auto check for updates 5s after activate (silent — only nags if newer exists)
+  setTimeout(() => checkForUpdates(ctx, log, { silent: true }).catch(() => {}), 5000);
 
   // Restore persisted state for this workspace
   const savedHistory = workspaceMemento.get<ChatMessage[]>(HISTORY_KEY) || [];
