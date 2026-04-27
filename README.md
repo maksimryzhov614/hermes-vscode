@@ -1,6 +1,8 @@
 # Hermes Agent — расширение для VS Code
 
-[![Release](https://img.shields.io/github/v/release/maksimryzhov614/hermes-vscode?style=flat-square)](https://github.com/maksimryzhov614/hermes-vscode/releases/latest)
+**Русский** · [English](./README.en.md)
+
+[![Release](https://img.shields.io/github/v/release/maksimryzhov614/hermes-vscode?style=flat-square&cacheSeconds=60)](https://github.com/maksimryzhov614/hermes-vscode/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
 [![VS Code ≥1.85](https://img.shields.io/badge/VS%20Code-%E2%89%A51.85-007ACC?style=flat-square&logo=visualstudiocode)](https://code.visualstudio.com)
 
@@ -47,15 +49,45 @@
 3. Открой ему HTTPS-доступ снаружи
 4. Получишь URL вида `https://hermes.example.com` — он понадобится при первом запуске расширения
 
-## Установка расширения
+## Установка — Linux
 
 Скачай последний `.vsix` из [Releases](https://github.com/maksimryzhov614/hermes-vscode/releases/latest), затем:
 
 ```bash
+cd ~/Downloads
 code --install-extension hermes-vscode-<версия>.vsix --force
 ```
 
-Или через GUI: **Extensions → ⋯ → Install from VSIX…**
+## Установка — Windows
+
+В **PowerShell**:
+
+```powershell
+cd $HOME\Downloads
+```
+```powershell
+code --install-extension .\hermes-vscode-<версия>.vsix --force
+```
+
+Если `code` не доступен в PATH: открой VS Code → `Ctrl+Shift+P` → **Shell Command: Install 'code' command in PATH**, затем перезапусти PowerShell.
+
+## Установка — macOS
+
+Если VS Code ещё не стоит:
+```bash
+brew install --cask visual-studio-code
+```
+
+Включи `code` CLI: VS Code → `Cmd+Shift+P` → **Shell Command: Install 'code' command in PATH**, перезапусти Terminal.
+
+```bash
+cd ~/Downloads
+code --install-extension hermes-vscode-<версия>.vsix --force
+```
+
+Reload window: `Cmd+Shift+P` → **Developer: Reload Window**.
+
+Альтернатива — установка через GUI: **Extensions → ⋯ → Install from VSIX…**
 
 ## Первый запуск
 
@@ -139,7 +171,8 @@ hermes-vscode/
 │   └── release.yml           CI: тег → сборка → Release с .vsix
 ├── media/icon.svg
 ├── package.json
-└── README.md                 (этот файл)
+├── README.md                 русский (по умолчанию, этот файл)
+└── README.en.md              английский
 ```
 
 ## Лицензия
