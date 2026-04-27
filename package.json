@@ -1,0 +1,79 @@
+{
+  "name": "hermes-vscode",
+  "displayName": "Hermes Agent",
+  "description": "Chat with your remote Hermes agent — pair via Telegram, attach files, paste screenshots, apply edits with diff preview.",
+  "version": "0.9.3",
+  "publisher": "suicidesunrise",
+  "license": "MIT",
+  "author": "suicidesunrise",
+  "homepage": "https://github.com/suicidesunrise/hermes-vscode#readme",
+  "repository": { "type": "git", "url": "https://github.com/suicidesunrise/hermes-vscode.git" },
+  "bugs": { "url": "https://github.com/suicidesunrise/hermes-vscode/issues" },
+  "keywords": ["ai", "chat", "hermes", "agent", "llm", "copilot", "cursor", "telegram"],
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["AI", "Chat", "Other"],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "hermes.openChat",          "title": "Hermes: Open Chat" },
+      { "command": "hermes.pair",              "title": "Hermes: Pair this device" },
+      { "command": "hermes.rediscover",        "title": "Hermes: Re-discover bridge" },
+      { "command": "hermes.signOut",           "title": "Hermes: Sign out (forget token)" },
+      { "command": "hermes.clearHistory",      "title": "Hermes: Clear conversation history" },
+      { "command": "hermes.sendFile",          "title": "Hermes: Attach active file" },
+      { "command": "hermes.sendSelection",     "title": "Hermes: Attach selection" },
+      { "command": "hermes.askAboutSelection", "title": "Hermes: Ask about this" }
+    ],
+    "menus": {
+      "editor/context": [
+        { "command": "hermes.askAboutSelection", "group": "navigation@9", "when": "editorHasSelection || editorTextFocus" }
+      ],
+      "editor/title/context": [
+        { "command": "hermes.sendFile", "group": "navigation@9" }
+      ]
+    },
+    "keybindings": [
+      { "command": "hermes.askAboutSelection", "key": "ctrl+alt+h", "mac": "cmd+alt+h", "when": "editorTextFocus" },
+      { "command": "hermes.openChat",          "key": "ctrl+alt+l", "mac": "cmd+alt+l" }
+    ],
+    "configuration": {
+      "title": "Hermes Agent",
+      "properties": {
+        "hermes.bridgeUrl": {
+          "type": "string",
+          "default": "https://hermes.suicidesunrise0.ru",
+          "description": "URL of the hermes-bridge."
+        },
+        "hermes.autoApply": {
+          "type": "boolean",
+          "default": false,
+          "description": "Apply proposed file edits automatically without showing the Review card. Safe-by-default off; turn on for a Cursor-style YOLO experience."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "hermes", "title": "Hermes", "icon": "media/icon.svg" }
+      ]
+    },
+    "views": {
+      "hermes": [
+        { "id": "hermes.chatView", "name": "Chat", "type": "webview" }
+      ]
+    }
+  },
+  "scripts": {
+    "build":   "node esbuild.config.mjs",
+    "watch":   "node esbuild.config.mjs --watch",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node":   "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce":  "^3.0.0",
+    "esbuild":       "^0.24.0",
+    "typescript":    "^5.4.0"
+  }
+}

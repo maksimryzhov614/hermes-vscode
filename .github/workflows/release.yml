@@ -1,0 +1,45 @@
+name: release
+
+# Build the extension and attach the .vsix to a GitHub Release whenever a
+# version tag (vX.Y.Z) is pushed.
+#
+#   git tag v0.9.4
+#   git push origin v0.9.4
+# → CI runs, builds, packages, drafts the release with the .vsix attached.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - run: npx vsce package --allow-missing-repository --out hermes-vscode.vsix
+
+      - name: Rename to versioned filename
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mv hermes-vscode.vsix "hermes-vscode-$VERSION.vsix"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: hermes-vscode-*.vsix
+          generate_release_notes: true
+          fail_on_unmatched_files: true
