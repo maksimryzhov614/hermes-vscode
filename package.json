@@ -2,7 +2,7 @@
   "name": "hermes-vscode",
   "displayName": "Hermes Agent",
   "description": "Chat with your remote Hermes agent — pair via Telegram, attach files, paste screenshots, apply edits with diff preview.",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "publisher": "maksimryzhov614",
   "license": "MIT",
   "author": "maksimryzhov614",
@@ -23,7 +23,8 @@
       { "command": "hermes.clearHistory",      "title": "Hermes: Clear conversation history" },
       { "command": "hermes.sendFile",          "title": "Hermes: Attach active file" },
       { "command": "hermes.sendSelection",     "title": "Hermes: Attach selection" },
-      { "command": "hermes.askAboutSelection", "title": "Hermes: Ask about this" }
+      { "command": "hermes.askAboutSelection", "title": "Hermes: Ask about this" },
+      { "command": "hermes.checkForUpdates",   "title": "Hermes: Check for updates" }
     ],
     "menus": {
       "editor/context": [
@@ -49,6 +50,11 @@
           "type": "boolean",
           "default": false,
           "description": "Apply proposed file edits automatically without showing the Review card. Safe-by-default off; turn on for a Cursor-style YOLO experience."
+        },
+        "hermes.checkUpdates": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check GitHub Releases for a newer .vsix on startup; show a notification if an update is available."
         }
       }
     },
