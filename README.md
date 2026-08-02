@@ -35,7 +35,7 @@
 - 🛡 **Три режима** — *Default* (ревью каждой правки), ⚡ *Auto-edit* (Cursor-style), 📋 *Plan* (сначала план, потом исполнение)
 - 💾 **История диалога** сохраняется по workspace — переживёт reload
 - 📊 **Расход токенов** виден после каждого ответа
-- 🪶 **Лёгкое** — один `.vsix` ~30 КБ, никаких runtime-зависимостей
+- 🪶 **Лёгкое** — один `.vsix` ~50 КБ, никаких runtime-зависимостей
 
 ## ⚠️ Важно: нужен self-hosted bridge
 
@@ -151,9 +151,9 @@ code --install-extension hermes-vscode-<версия>.vsix --force
 Workflow `release.yml` собирает и публикует Release при каждом теге `v*.*.*`:
 
 ```bash
-# забампи version в package.json, потом:
-git tag v0.9.4
-git push origin main --tags
+# после изменения version в package.json:
+git tag v0.10.1
+git push origin v0.10.1
 ```
 
 GitHub Actions сам соберёт `.vsix` и приложит к новому Release с авто-генерируемыми release-notes.

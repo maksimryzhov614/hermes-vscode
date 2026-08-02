@@ -35,7 +35,7 @@ A VS Code chat panel for a self-hosted [Hermes Agent](https://github.com/NousRes
 - 🛡 **Three modes** — *Default* (review each), ⚡ *Auto-edit* (Cursor-style), 📋 *Plan* (think first, then execute)
 - 💾 **Conversation persists** per workspace — survives reload
 - 📊 **Token usage** shown after every reply
-- 🪶 **Lightweight** — single ~30 KB `.vsix`, zero runtime dependencies
+- 🪶 **Lightweight** — single ~50 KB `.vsix`, zero runtime dependencies
 
 ## ⚠️ You need a self-hosted bridge
 
@@ -149,9 +149,9 @@ code --install-extension hermes-vscode-<version>.vsix --force
 The `release.yml` workflow builds and publishes a Release whenever a `v*.*.*` tag is pushed:
 
 ```bash
-# bump version in package.json, then:
-git tag v0.9.5
-git push origin main --tags
+# after changing version in package.json:
+git tag v0.10.1
+git push origin v0.10.1
 ```
 
 GitHub Actions builds the `.vsix` and attaches it to a fresh Release with auto-generated notes.
