@@ -45,6 +45,7 @@ describe("portfolio documentation", () => {
     const packageJson = JSON.parse(packageSource) as {
       author?: unknown;
       homepage?: unknown;
+      scripts?: Record<string, unknown>;
       version?: unknown;
     };
     const packageLock = JSON.parse(lockSource) as {
@@ -57,6 +58,9 @@ describe("portfolio documentation", () => {
       homepage: "https://github.com/maksimryzhov614/hermes-vscode",
       version: "0.10.1",
     });
+    expect(packageJson.scripts?.["preview:capture"]).toBe(
+      "node scripts/capture-panel-preview.mjs docs/assets/hermes-panel.png",
+    );
     expect(packageLock.version).toBe("0.10.1");
     expect(packageLock.packages?.[""]?.version).toBe("0.10.1");
     expect(license).toContain("Copyright (c) 2026 Maksim Ryzhov");
@@ -64,13 +68,15 @@ describe("portfolio documentation", () => {
 
   it("ships a bounded 960x720 PNG generated from public-safe sample data", async () => {
     const imagePath = resolve(root, "docs/assets/hermes-panel.png");
-    const [image, imageStat, renderer, english, russian] = await Promise.all([
+    const [image, imageStat, renderer, capture, english, russian] =
+      await Promise.all([
       readFile(imagePath),
       stat(imagePath),
       readFile(resolve(root, "scripts/render-panel-preview.mjs"), "utf8"),
+      readFile(resolve(root, "scripts/capture-panel-preview.mjs"), "utf8"),
       readFile(resolve(root, "README.md"), "utf8"),
       readFile(resolve(root, "README.ru.md"), "utf8"),
-    ]);
+      ]);
 
     expect(image.subarray(0, 8)).toEqual(
       Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
@@ -85,8 +91,13 @@ describe("portfolio documentation", () => {
     expect(renderer).toContain("Review src/cart.ts before I merge it.");
     expect(renderer).toContain("Content-Security-Policy");
     expect(renderer).toContain("acquireVsCodeApi");
+    expect(capture).toContain('channel: "chrome"');
+    expect(capture).toContain("width: 960");
+    expect(capture).toContain("height: 720");
+    expect(capture).toContain("render-panel-preview.mjs");
+    expect(english).toContain("npm run preview:capture");
 
-    const publicText = [renderer, english, russian].join("\n");
+    const publicText = [renderer, capture, english, russian].join("\n");
     const pngStrings = image.toString("latin1");
     const formerAccount = new RegExp(["lil", "debil"].join(""), "iu");
     const credentialPrefix = new RegExp(
@@ -100,7 +111,7 @@ describe("portfolio documentation", () => {
       expect(content).not.toMatch(/\b(?:Tunika|Mansara|Artsquare)\b/iu);
       expect(content).not.toMatch(/Documents\/|private\/|\.ssh\//iu);
     }
-    expect([renderer, pngStrings].join("\n")).not.toMatch(
+    expect([renderer, capture, pngStrings].join("\n")).not.toMatch(
       /https?:\/\/(?!hermes\.example\.com(?:[/:]|$))/iu,
     );
   });

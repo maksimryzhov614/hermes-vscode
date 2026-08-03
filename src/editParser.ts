@@ -1,3 +1,4 @@
+import { lstatSync, realpathSync } from "node:fs";
 import * as path from "node:path";
 
 export interface ProposedEdit {
@@ -30,6 +31,9 @@ export function validateEditPath(editPath: string): string {
   ) {
     throw new Error("Edit path must not be absolute");
   }
+  if (/^[A-Za-z]:/u.test(normalizedSeparators)) {
+    throw new Error("Edit path must not use a drive prefix");
+  }
 
   const normalized = path.posix.normalize(normalizedSeparators);
   if (
@@ -49,7 +53,39 @@ export function resolveWorkspaceEditPath(
   const normalizedEditPath = validateEditPath(editPath);
   const resolvedRoot = path.resolve(workspaceRoot);
   const target = path.resolve(resolvedRoot, normalizedEditPath);
-  const relativeTarget = path.relative(resolvedRoot, target);
+  assertInsideWorkspace(resolvedRoot, target);
+
+  const canonicalRoot = realpathSync(resolvedRoot);
+  let existingAncestor = target;
+  const missingSegments: string[] = [];
+  while (true) {
+    try {
+      lstatSync(existingAncestor);
+      break;
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
+      const parent = path.dirname(existingAncestor);
+      if (parent === existingAncestor) {
+        throw new Error("Edit path resolves outside workspace");
+      }
+      missingSegments.unshift(path.basename(existingAncestor));
+      existingAncestor = parent;
+    }
+  }
+
+  let canonicalAncestor: string;
+  try {
+    canonicalAncestor = realpathSync(existingAncestor);
+  } catch {
+    throw new Error("Edit path contains an unresolvable symlink");
+  }
+  const canonicalTarget = path.resolve(canonicalAncestor, ...missingSegments);
+  assertInsideWorkspace(canonicalRoot, canonicalTarget);
+  return canonicalTarget;
+}
+
+function assertInsideWorkspace(workspaceRoot: string, target: string): void {
+  const relativeTarget = path.relative(workspaceRoot, target);
   if (
     relativeTarget === ".." ||
     relativeTarget.startsWith(`..${path.sep}`) ||
@@ -57,7 +93,15 @@ export function resolveWorkspaceEditPath(
   ) {
     throw new Error("Edit path resolves outside workspace");
   }
-  return target;
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
 }
 
 export function parseEdits(text: string): ProposedEdit[] {

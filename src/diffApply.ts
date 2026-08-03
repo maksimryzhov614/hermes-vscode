@@ -53,7 +53,13 @@ export async function reviewEdit(
       { modal: true }, "Delete file", "Cancel"
     );
     if (choice === "Delete file") {
-      try { await vscode.workspace.fs.delete(target); return "applied"; }
+      try {
+        const safeTarget = vscode.Uri.file(
+          resolveWorkspaceEditPath(workspaceRoot, edit.path),
+        );
+        await vscode.workspace.fs.delete(safeTarget);
+        return "applied";
+      }
       catch { return "cancelled"; }
     }
     return "rejected";
@@ -84,11 +90,14 @@ export async function reviewEdit(
   if (decision !== "Apply") return "rejected";
 
   try {
+    const safeTarget = vscode.Uri.file(
+      resolveWorkspaceEditPath(workspaceRoot, edit.path),
+    );
     // Ensure parent dir exists
     await vscode.workspace.fs.createDirectory(
-      vscode.Uri.file(path.dirname(target.fsPath))
+      vscode.Uri.file(path.dirname(safeTarget.fsPath))
     );
-    await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(edit.content));
+    await vscode.workspace.fs.writeFile(safeTarget, new TextEncoder().encode(edit.content));
     return "applied";
   } catch (e: any) {
     vscode.window.showErrorMessage(`Failed to write ${edit.path}: ${e.message}`);

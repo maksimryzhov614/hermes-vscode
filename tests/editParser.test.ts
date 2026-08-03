@@ -1,3 +1,5 @@
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -44,6 +46,7 @@ describe("parseEdits", () => {
     ["empty path", "path= mode=replace"],
     ["POSIX absolute path", "path=/tmp/x mode=replace"],
     ["Windows drive path", "path=C:\\secret mode=replace"],
+    ["Windows drive-relative path", "path=C:secret mode=replace"],
     ["UNC path", "path=\\\\server\\share mode=replace"],
     ["parent traversal", "path=../secret mode=replace"],
     ["backslash traversal", "path=..\\secret mode=replace"],
@@ -54,7 +57,7 @@ describe("parseEdits", () => {
 });
 
 describe("resolveWorkspaceEditPath", () => {
-  const workspaceRoot = resolve("/workspace");
+  const workspaceRoot = resolve(".");
 
   it("resolves a nested relative path inside the workspace", () => {
     expect(resolveWorkspaceEditPath(workspaceRoot, "src/a.ts")).toBe(
@@ -68,6 +71,7 @@ describe("resolveWorkspaceEditPath", () => {
     ["sibling prefix escape", "../workspace-evil/file", /outside workspace/u],
     ["POSIX absolute path", "/tmp/x", /absolute/u],
     ["Windows drive path", "C:\\secret", /absolute/u],
+    ["Windows drive-relative path", "C:secret", /drive/u],
     ["UNC path", "\\\\server\\share", /absolute/u],
     ["empty path", "", /empty/u],
     ["NUL byte", "safe\0name", /NUL/u],
@@ -75,5 +79,21 @@ describe("resolveWorkspaceEditPath", () => {
     expect(() => resolveWorkspaceEditPath(workspaceRoot, editPath)).toThrow(
       error,
     );
+  });
+
+  it("rejects a path whose workspace segment is a symlink outside", async () => {
+    const temporaryRoot = await mkdtemp(join(tmpdir(), "hermes-edit-path-"));
+    const workspace = join(temporaryRoot, "workspace");
+    const outside = join(temporaryRoot, "outside");
+    await Promise.all([mkdir(workspace), mkdir(outside)]);
+    await symlink(outside, join(workspace, "linked-outside"), "dir");
+
+    try {
+      expect(() =>
+        resolveWorkspaceEditPath(workspace, "linked-outside/file.ts"),
+      ).toThrow(/outside workspace/u);
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
   });
 });

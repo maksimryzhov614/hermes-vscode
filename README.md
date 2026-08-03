@@ -148,6 +148,7 @@ npm install
 npm test
 npx tsc --noEmit
 npm run build               # esbuild → out/extension.js
+npm run preview:capture     # Google Chrome → docs/assets/hermes-panel.png
 npx vsce package            # → hermes-vscode-<version>.vsix
 code --install-extension hermes-vscode-<version>.vsix --force
 ```

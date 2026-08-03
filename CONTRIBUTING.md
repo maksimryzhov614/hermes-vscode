@@ -13,6 +13,7 @@ npm ci
 npm test
 npx tsc --noEmit
 npm run build
+npm run preview:capture
 npx vsce package --no-dependencies --out /tmp/hermes-vscode.vsix
 ```
 
