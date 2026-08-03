@@ -1,17 +1,9 @@
-name: release
-
-# Build the extension and attach the .vsix to a GitHub Release whenever a
-# version tag (vX.Y.Z) is pushed.
-#
-#   git tag v0.9.4
-#   git push origin v0.9.4
-# → CI runs, builds, packages, drafts the release with the .vsix attached.
+name: Release
 
 on:
   push:
     tags:
       - 'v*.*.*'
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -20,23 +12,28 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: '20'
-          cache: 'npm'
-
+          node-version: '24'
+          cache: npm
       - run: npm ci
+      - name: Assert exact release tag
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must use exact vMAJOR.MINOR.PATCH syntax" >&2
+            exit 1
+          fi
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          test "$GITHUB_REF_NAME" = "v$PACKAGE_VERSION"
+      - run: npm test
       - run: npx tsc --noEmit
       - run: npm run build
-      - run: npx vsce package --allow-missing-repository --out hermes-vscode.vsix
-
+      - run: npx vsce package --no-dependencies --out hermes-vscode.vsix
       - name: Rename to versioned filename
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          mv hermes-vscode.vsix "hermes-vscode-$VERSION.vsix"
-
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          mv hermes-vscode.vsix "hermes-vscode-$PACKAGE_VERSION.vsix"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
