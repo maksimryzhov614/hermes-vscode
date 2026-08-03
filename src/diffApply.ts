@@ -1,5 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { resolveWorkspaceEditPath } from "./editParser";
+import type { ProposedEdit } from "./editParser";
+
+export { parseEdits } from "./editParser";
+export type { ProposedEdit } from "./editParser";
 
 /**
  * Detect and apply edits proposed by the agent.
@@ -25,49 +30,13 @@ import * as path from "node:path";
  * user to click Accept (Save) or Reject (close without saving).
  */
 
-export interface ProposedEdit {
-  path: string;          // as written by the model (relative to workspace root)
-  mode: "replace" | "create" | "delete";
-  content: string;
-  /** Position in the source markdown for highlighting later. */
-  range: { start: number; end: number };
-}
-
-const FENCE = /~~~hermes-edit\s+([^\n]*)\n([\s\S]*?)~~~/g;
-
-export function parseEdits(text: string): ProposedEdit[] {
-  const out: ProposedEdit[] = [];
-  for (const m of text.matchAll(FENCE)) {
-    const headerStr = (m[1] ?? "").trim();
-    const body = m[2] ?? "";
-    const header = parseHeader(headerStr);
-    if (!header.path) continue;
-    out.push({
-      path: header.path,
-      mode: (header.mode as ProposedEdit["mode"]) ?? "replace",
-      content: body.replace(/\n$/, ""),
-      range: { start: m.index ?? 0, end: (m.index ?? 0) + m[0].length }
-    });
-  }
-  return out;
-}
-
-function parseHeader(s: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const part of s.split(/\s+/)) {
-    const eq = part.indexOf("=");
-    if (eq > 0) out[part.slice(0, eq)] = part.slice(eq + 1);
-  }
-  return out;
-}
-
 /** Open a diff preview, return user's decision. */
 export async function reviewEdit(
   edit: ProposedEdit,
   workspaceRoot: string
 ): Promise<"applied" | "rejected" | "cancelled"> {
   const target = vscode.Uri.file(
-    path.isAbsolute(edit.path) ? edit.path : path.join(workspaceRoot, edit.path)
+    resolveWorkspaceEditPath(workspaceRoot, edit.path),
   );
 
   // Fetch the original (or empty for create)
@@ -130,7 +99,7 @@ export async function reviewEdit(
 /** Apply an edit without any UI prompt — used by auto-apply mode. */
 export async function applyEditNow(edit: ProposedEdit, workspaceRoot: string): Promise<void> {
   const target = vscode.Uri.file(
-    path.isAbsolute(edit.path) ? edit.path : path.join(workspaceRoot, edit.path)
+    resolveWorkspaceEditPath(workspaceRoot, edit.path),
   );
   if (edit.mode === "delete") {
     try { await vscode.workspace.fs.delete(target); }
