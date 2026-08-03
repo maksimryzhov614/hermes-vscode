@@ -2,3 +2,5 @@ node_modules/
 out/
 *.vsix
 .DS_Store
+.cocoindex_code/
+.playwright-cli/

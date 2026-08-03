@@ -1,20 +1,24 @@
-# Hermes Agent — расширение для VS Code
+# Hermes Agent — VS Code Extension
 
-**Русский** · [English](./README.en.md)
+**English** · [Русский](./README.ru.md)
 
 [![Release](https://img.shields.io/github/v/release/maksimryzhov614/hermes-vscode?style=flat-square&cacheSeconds=60)](https://github.com/maksimryzhov614/hermes-vscode/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
 [![VS Code ≥1.85](https://img.shields.io/badge/VS%20Code-%E2%89%A51.85-007ACC?style=flat-square&logo=visualstudiocode)](https://code.visualstudio.com)
 
-Чат-панель в VS Code для self-hosted [Hermes Agent](https://github.com/NousResearch/hermes-agent), который крутится на твоём сервере. По духу — как Cursor или Copilot, только бэкенд полностью твой.
+A VS Code chat panel for a self-hosted [Hermes Agent](https://github.com/NousResearch/hermes-agent). In spirit — like Cursor or Copilot, but with a fully self-hosted backend.
+
+![Hermes Agent interface preview](docs/assets/hermes-panel.png)
+
+_Interface preview generated from the extension's real webview with synthetic sample data._
 
 ```
                 ┌─────────────────────────┐
-                │   VS Code (любой ПК)    │
+                │   VS Code (any device)  │
                 │                         │
                 │  ⌘  Hermes chat panel   │
                 └────────────┬────────────┘
-                             │  HTTPS + Bearer-токен
+                             │  HTTPS + Bearer token
                              ▼
                 ┌─────────────────────────┐
                 │     hermes-bridge       │
@@ -27,89 +31,89 @@
                 └─────────────────────────┘
 ```
 
-## Возможности
+## Features
 
-- 🔐 **Pairing через Telegram** — бот шлёт одноразовую ссылку «Approve», ничего вручную копировать не нужно
-- 📎 **Прикрепить файл/выделение** из редактора, **вставить скриншот** прямо в чат (vision)
-- ✏️ **Diff-apply** правок — модель отдаёт структурированные блоки, ты ревьюишь через нативный VS Code diff
-- 🛡 **Три режима** — *Default* (ревью каждой правки), ⚡ *Auto-edit* (Cursor-style), 📋 *Plan* (сначала план, потом исполнение)
-- 💾 **История диалога** сохраняется по workspace — переживёт reload
-- 📊 **Расход токенов** виден после каждого ответа
-- 🪶 **Лёгкое** — один `.vsix` ~50 КБ, никаких runtime-зависимостей
+- 🔐 **Telegram pairing** — bot sends a one-tap Approve link, no token copy-paste
+- 📎 **Attach files & selections** from the editor; **paste screenshots** straight into chat (vision)
+- ✏️ **Diff-apply edits** — model emits structured edit blocks, you review/apply with VS Code's native diff
+- 🛡 **Three modes** — *Default* (review each), ⚡ *Auto-edit* (Cursor-style), 📋 *Plan* (think first, then execute)
+- 💾 **Conversation persists** per workspace — survives reload
+- 📊 **Token usage** shown after every reply
+- 🪶 **Lightweight** — single ~50 KB `.vsix`, zero runtime dependencies
 
-## ⚠️ Важно: нужен self-hosted bridge
+## ⚠️ You need a self-hosted bridge
 
-Это **только клиент**. Серверная часть (Hermes Agent + hermes-bridge) должна работать у тебя — на VPS, домашнем сервере, в облаке. Без bridge URL расширение работать не будет.
+**No hosted bridge is included.** This is only the client. The server side
+(Hermes Agent + hermes-bridge) must run somewhere you control — VPS, home
+server, or cloud. Without a bridge URL, the extension does nothing.
 
-**Как поднять серверную часть** — см. [`bridge/README.md`](./bridge/README.md). Там полный гайд: что нужно поставить, как настроить, как открыть HTTPS-доступ через Cloudflare Tunnel или Tailscale.
+**Server setup guide** — see [`bridge/README.md`](./bridge/README.md). Full walkthrough: prerequisites, configuration, exposing it via Cloudflare Tunnel or Tailscale.
 
-Коротко:
-1. Поставь **Hermes Agent** ([github.com/NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)) и включи `api_server`
-2. Запусти **hermes-bridge** (исходник в `bridge/` этого репо)
-3. Открой ему HTTPS-доступ снаружи
-4. Получишь URL вида `https://hermes.example.com` — он понадобится при первом запуске расширения
+In short:
+1. Install **Hermes Agent** ([github.com/NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)) and enable `api_server`
+2. Run **hermes-bridge** (source in this repo's `bridge/` folder)
+3. Expose it over HTTPS
+4. You'll get a URL like `https://hermes.example.com` — needed on first launch
 
-## Установка — Linux
+## Install — Linux
 
-Скачай последний `.vsix` из [Releases](https://github.com/maksimryzhov614/hermes-vscode/releases/latest), затем:
+Download the latest `.vsix` from [Releases](https://github.com/maksimryzhov614/hermes-vscode/releases/latest), then:
 
 ```bash
 cd ~/Downloads
-code --install-extension hermes-vscode-<версия>.vsix --force
+code --install-extension hermes-vscode-<version>.vsix --force
 ```
 
-## Установка — Windows
+## Install — Windows
 
-В **PowerShell**:
+In **PowerShell**:
 
 ```powershell
 cd $HOME\Downloads
 ```
 ```powershell
-code --install-extension .\hermes-vscode-<версия>.vsix --force
+code --install-extension .\hermes-vscode-<version>.vsix --force
 ```
 
-Если `code` не доступен в PATH: открой VS Code → `Ctrl+Shift+P` → **Shell Command: Install 'code' command in PATH**, затем перезапусти PowerShell.
+If the `code` command is not on PATH: open VS Code → `Ctrl+Shift+P` → **Shell Command: Install 'code' command in PATH**, then restart PowerShell.
 
-## Установка — macOS
+## Install — macOS
 
-Если VS Code ещё не стоит:
+If you don't have VS Code yet:
 ```bash
 brew install --cask visual-studio-code
 ```
 
-Включи `code` CLI: VS Code → `Cmd+Shift+P` → **Shell Command: Install 'code' command in PATH**, перезапусти Terminal.
+Make sure the `code` CLI is on your PATH: open VS Code → `Cmd+Shift+P` → **Shell Command: Install 'code' command in PATH**, then restart Terminal.
 
 ```bash
 cd ~/Downloads
-code --install-extension hermes-vscode-<версия>.vsix --force
+code --install-extension hermes-vscode-<version>.vsix --force
 ```
 
-Reload window: `Cmd+Shift+P` → **Developer: Reload Window**.
+Reload the window: `Cmd+Shift+P` → **Developer: Reload Window**.
 
-Альтернатива — установка через GUI: **Extensions → ⋯ → Install from VSIX…**
+## First launch
 
-## Первый запуск
+1. Open settings (`Ctrl+,` / `Cmd+,`) → find `hermes.bridgeUrl` → enter your bridge URL (`https://hermes.example.com`)
+2. Click the **shield** icon in the activity bar (or `Ctrl+Alt+L` / `Cmd+Alt+L`)
+3. Click **Start pairing** — a one-time code appears
+4. Open Telegram → your bot will send a message with the code and an **✅ Approve** button — tap it
+5. The panel switches to chat mode in a second — done
 
-1. Открой настройки (`Ctrl+,` / `Cmd+,`) → найди `hermes.bridgeUrl` → впиши URL своего bridge (`https://hermes.example.com`)
-2. Кликни иконку **щит** на activity bar (или `Ctrl+Alt+L` / `Cmd+Alt+L`)
-3. Жми **Start pairing** — появится одноразовый код
-4. Открой Telegram → твой бот пришлёт сообщение с кодом и кнопкой **✅ Approve** — тапни
-5. Через секунду панель переключится в режим чата — готово
+## Settings
 
-## Настройки
-
-| Ключ | По умолчанию | Назначение |
+| Key | Default | Purpose |
 |---|---|---|
-| `hermes.bridgeUrl` | (пусто) | URL твоего bridge — обязательно укажи |
-| `hermes.autoApply` | `false` | Применять правки без подтверждения (legacy; используй вместо него Mode-pill в панели) |
+| `hermes.bridgeUrl` | (empty) | URL of your bridge — required |
+| `hermes.autoApply` | `false` | Apply edits without confirmation (legacy; use the Mode pill in the panel instead) |
 
-## Команды и хоткеи
+## Commands & keybindings
 
-| Команда | Хоткей |
+| Command | Default |
 |---|---|
 | **Hermes: Open Chat** | `Ctrl+Alt+L` / `Cmd+Alt+L` |
-| **Hermes: Ask about this** (в редакторе) | `Ctrl+Alt+H` / `Cmd+Alt+H` |
+| **Hermes: Ask about this** (in editor) | `Ctrl+Alt+H` / `Cmd+Alt+H` |
 | **Hermes: Pair this device** | — |
 | **Hermes: Sign out** | — |
 | **Hermes: Re-discover bridge** | — |
@@ -117,64 +121,72 @@ Reload window: `Cmd+Shift+P` → **Developer: Reload Window**.
 | **Hermes: Attach selection** | — |
 | **Hermes: Clear conversation history** | — |
 
-ПКМ в редакторе → **Hermes: Ask about this**. ПКМ по табу файла → **Hermes: Attach active file**.
+Right-click in the editor → **Hermes: Ask about this**. Right-click on a file tab → **Hermes: Attach active file**.
 
-## Как работает редактирование файлов
+## How file edits work
 
-Когда ты просишь агента поменять файл, он отвечает структурированными блоками:
+When you ask the agent to change files, it responds with structured blocks:
 
 ````
 ~~~hermes-edit path=src/foo.ts mode=replace
-<полное новое содержимое>
+<full new file contents>
 ~~~
 ````
 
-Режимы: `replace` · `create` · `delete`. Пути относительно корня workspace.
+Modes: `replace` · `create` · `delete`. Paths resolve relative to the first workspace folder.
 
-Расширение парсит блоки и для каждого рисует **карточку Review** в чате. Клик на *Review* → side-by-side diff в VS Code → модальное окно Apply/Reject.
+The extension parses each block and shows it as a **Review card** in chat. Click *Review* → side-by-side diff → modal Apply/Reject.
 
-В режиме **Auto-edit** карточки применяются мгновенно. В режиме **Plan** агент сначала пишет нумерованный план и ждёт твоего ответа *go* / *yes* / *proceed* — только после этого можно применять правки.
+In **Auto-edit** mode the cards apply themselves immediately. In **Plan** mode the agent must first present a numbered plan and wait for you to reply *go* / *yes* / *proceed* before edit blocks are honoured.
 
-## Сборка из исходников
+## Build from source
 
 ```bash
 git clone https://github.com/maksimryzhov614/hermes-vscode.git
 cd hermes-vscode
 npm install
+npm test
+npx tsc --noEmit
 npm run build               # esbuild → out/extension.js
-npx vsce package            # → hermes-vscode-<версия>.vsix
-code --install-extension hermes-vscode-<версия>.vsix --force
+npx vsce package            # → hermes-vscode-<version>.vsix
+code --install-extension hermes-vscode-<version>.vsix --force
 ```
 
-## Релизы
+## Releases
 
-Workflow `release.yml` собирает и публикует Release при каждом теге `v*.*.*`:
+The `release.yml` workflow builds and publishes a Release whenever a `v*.*.*` tag is pushed:
 
 ```bash
-# после изменения version в package.json:
+# after changing version in package.json:
 git tag v0.10.1
 git push origin v0.10.1
 ```
 
-GitHub Actions сам соберёт `.vsix` и приложит к новому Release с авто-генерируемыми release-notes.
+GitHub Actions builds the `.vsix` and attaches it to a fresh Release with auto-generated notes.
 
-## Структура репо
+## Repo layout
 
 ```
 hermes-vscode/
-├── src/                      VSCode-расширение (TypeScript)
-├── bridge/                   серверная часть (см. bridge/README.md)
-│   ├── bridge.py             aiohttp-сервис
-│   ├── .env.example          конфиг
+├── src/                      VS Code extension (TypeScript)
+├── bridge/                   server side (see bridge/README.md)
+│   ├── bridge.py             aiohttp service
+│   ├── .env.example          configuration
 │   └── hermes-bridge.service systemd unit
 ├── .github/workflows/
-│   └── release.yml           CI: тег → сборка → Release с .vsix
+│   ├── ci.yml                push / pull-request verification
+│   └── release.yml           exact tag → build → Release with .vsix
+├── docs/assets/              generated interface preview
 ├── media/icon.svg
 ├── package.json
-├── README.md                 русский (по умолчанию, этот файл)
-└── README.en.md              английский
+├── README.md                 English (default)
+└── README.ru.md              Russian
 ```
 
-## Лицензия
+## Project policies
+
+[Security policy](./SECURITY.md) · [Contributing guide](./CONTRIBUTING.md) · [Changelog](./CHANGELOG.md)
+
+## License
 
 [MIT](./LICENSE) — © 2026 Maksim Ryzhov

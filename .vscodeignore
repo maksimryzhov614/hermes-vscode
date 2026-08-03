@@ -9,4 +9,5 @@ esbuild.config.mjs
 **/CLAUDE.md
 .github/**
 .cocoindex_code/**
-docs/**
+.playwright-cli/**
+scripts/**
