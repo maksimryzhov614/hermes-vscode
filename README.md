@@ -39,7 +39,7 @@ _Interface preview generated from the extension's real webview with synthetic sa
 - 🛡 **Three modes** — *Default* (review each), ⚡ *Auto-edit* (Cursor-style), 📋 *Plan* (think first, then execute)
 - 💾 **Conversation persists** per workspace — survives reload
 - 📊 **Token usage** shown after every reply
-- 🪶 **Lightweight** — single ~50 KB `.vsix`, zero runtime dependencies
+- 🪶 **Lightweight** — single ~75 KB `.vsix`, zero runtime dependencies
 
 ## ⚠️ You need a self-hosted bridge
 
