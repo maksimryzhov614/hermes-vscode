@@ -158,8 +158,8 @@ Workflow `release.yml` собирает и публикует Release при к�
 
 ```bash
 # после изменения version в package.json:
-git tag v0.10.1
-git push origin v0.10.1
+git tag v0.10.2
+git push origin v0.10.2
 ```
 
 GitHub Actions сам соберёт `.vsix` и приложит к новому Release с авто-генерируемыми release-notes.

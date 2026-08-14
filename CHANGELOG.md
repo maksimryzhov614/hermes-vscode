@@ -2,9 +2,12 @@
 
 ## Unreleased
 
-- Added push and pull-request CI, dependency updates, and workflow contracts.
-- Reject unsafe edit paths both while parsing and immediately before file I/O.
-- Added English-first documentation and a reproducible interface preview.
+## 0.10.2 — 2026-08-03
+
+- Reject unsafe edit paths before preview, deletion, directory creation, or write operations.
+- Added protected push and pull-request verification, workflow contracts, and dependency updates.
+- Added English-first documentation, project policies, and a reproducible Google Chrome interface preview.
+- Hardened preview capture and workspace path validation after independent review.
 
 ## 0.10.1
 

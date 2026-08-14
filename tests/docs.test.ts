@@ -33,7 +33,23 @@ describe("portfolio documentation", () => {
     expect(russian).toContain("docs/assets/hermes-panel.png");
     expect(security).toContain("Private vulnerability reporting");
     expect(contributing).toContain("npm test");
-    expect(changelog).toContain("## 0.10.1");
+    expect(changelog).toContain("## 0.10.2 — 2026-08-03");
+    expect(changelog).toContain(
+      "Reject unsafe edit paths before preview, deletion, directory creation, or write operations.",
+    );
+    expect(changelog).toContain(
+      "Added protected push and pull-request verification, workflow contracts, and dependency updates.",
+    );
+    expect(changelog).toContain(
+      "Added English-first documentation, project policies, and a reproducible Google Chrome interface preview.",
+    );
+    expect(changelog).toContain(
+      "Hardened preview capture and workspace path validation after independent review.",
+    );
+    expect(english).toContain("git tag v0.10.2");
+    expect(english).toContain("git push origin v0.10.2");
+    expect(russian).toContain("git tag v0.10.2");
+    expect(russian).toContain("git push origin v0.10.2");
   });
 
   it("uses consistent public package identity and versioning", async () => {
@@ -56,13 +72,13 @@ describe("portfolio documentation", () => {
     expect(packageJson).toMatchObject({
       author: "Maksim Ryzhov",
       homepage: "https://github.com/maksimryzhov614/hermes-vscode",
-      version: "0.10.1",
+      version: "0.10.2",
     });
     expect(packageJson.scripts?.["preview:capture"]).toBe(
       "node scripts/capture-panel-preview.mjs docs/assets/hermes-panel.png",
     );
-    expect(packageLock.version).toBe("0.10.1");
-    expect(packageLock.packages?.[""]?.version).toBe("0.10.1");
+    expect(packageLock.version).toBe("0.10.2");
+    expect(packageLock.packages?.[""]?.version).toBe("0.10.2");
     expect(license).toContain("Copyright (c) 2026 Maksim Ryzhov");
   });
 

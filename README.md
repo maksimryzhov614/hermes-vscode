@@ -159,8 +159,8 @@ The `release.yml` workflow builds and publishes a Release whenever a `v*.*.*` ta
 
 ```bash
 # after changing version in package.json:
-git tag v0.10.1
-git push origin v0.10.1
+git tag v0.10.2
+git push origin v0.10.2
 ```
 
 GitHub Actions builds the `.vsix` and attaches it to a fresh Release with auto-generated notes.
